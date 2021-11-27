@@ -1,0 +1,62 @@
+version: '3.4'
+
+x-xxx-common-services-config: &common-services-config
+  restart: always
+
+x-kafka-env: &kafka-env
+  KAFKA_BROKER_ID: 1
+  KAFKA_ADVERTISED_PORT: 9092
+  BROKER_ID_COMMAND: "hostname | cut -d'-' -f2"
+  KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+  KAFKA_CREATE_TOPICS: "logging:20:1,invoicing:10:1,orders:10:1"
+  KAFKA_LISTENERS: "PLAINTEXT://:9092"
+
+x-common-variables: &common-variables
+  DATASOURCE_HOST: ${DB_HOST}
+  DATASOURCE_USER: ${DB_USER}
+  DATASOURCE_PASSWORD: ${DB_PASSWORD}
+  DATASOURCE_NAME: ${DB_DATABASE}
+  DATASOURCE_PORT: ${DB_PORT}
+
+services:
+  mysqldb:
+    image: mysql
+    environment:
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+    volumes:
+      - mystorage:/var/lib/mysql
+
+  shipping:
+    build:
+      context: . #shippingsystem
+      dockerfile: shipping/Dockerfile
+    depends_on:
+      - mysqldb
+    ports:
+      - "2222:2222"
+    <<: *common-services-config
+    environment:
+      <<: *common-variables
+
+  zookeeper:
+    <<: *common-services-config
+    image: wurstmeister/zookeeper
+    environment:
+      ZOO_MY_ID: 1
+
+  kafka:
+    <<: *common-services-config
+    image: wurstmeister/kafka:2.11-2.0.0
+    environment: *kafka-env
+
+  debug-container:
+    build:
+      context: . #shippingsystem
+      dockerfile: fakeproducer/Dockerfile
+    command: exit 0
+
+volumes:
+  mystorage:
